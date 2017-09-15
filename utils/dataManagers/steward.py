@@ -1,36 +1,21 @@
+from utils.dataManagers.Data import DataObject
 from pathlib import Path
-
 import pandas as pd
 
-from utils.dataManagers.informations import informer
+
+def _read_data(data_type):
+    return pd.read_csv(Path('data/' + data_type + '.csv').absolute())
+
+
+def formulate_data(data_type, num_type_handling, categoricals_handling):
+    do = DataObject(_read_data(data_type))
+    return do.handle_missing_values(num_type_handling, categoricals_handling)
 
 
 class DataSteward(object):
-    def __init__(self):
-        self.train_data = self._get_data('train')
+    def __init__(self, categoricals_handling=None, num_type_handling=None):
+        self.train_data = formulate_data('train', num_type_handling, categoricals_handling)
+        self.test_data = formulate_data('test', num_type_handling, categoricals_handling)
+
         self.train_response = self.train_data.SalePrice
         del self.train_data['SalePrice']
-        self.test_data = self._get_data('test')
-
-    # def get_data_information(self):
-    #     return informer.get_data_information_df()
-
-    def _map_categorical_data(self, data):
-        for col, mapper in informer.get_value_mappings().items():
-            data[col].map(mapper)
-            data[col] = data[col].astype('category')
-        return data
-
-    def _fill_null_vals_in_categorical_data(self, data):
-        for col, mapper in informer.get_nan_value_mappings().items():
-            data[col].fillna(mapper, inplace=True)
-        return data
-
-    def _get_data(self, data_type):
-        data = pd.read_csv(Path('data/' + data_type + '.csv').absolute())
-        data = self._fill_null_vals_in_categorical_data(data)
-        data = self._map_categorical_data(data)
-
-        return data
-
-
