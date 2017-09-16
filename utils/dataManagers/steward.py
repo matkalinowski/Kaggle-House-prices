@@ -17,8 +17,8 @@ def set_id_as_index(df):
 
 def formulate_data(data_type, num_type_handling, categoricals_handling):
     data = _read_data(data_type)
-    data_without_nulls = NullsHandler(data, num_type_handling, categoricals_handling).handle_missing_values()
-    return set_id_as_index(data_without_nulls)
+    data = NullsHandler(data, num_type_handling, categoricals_handling).handle_missing_values()
+    return set_id_as_index(data)
 
 
 class DataSteward(object):
