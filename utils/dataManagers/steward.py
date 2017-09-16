@@ -10,7 +10,7 @@ def _read_data(data_type):
 
 
 def set_id_as_index(df):
-    df.index = df.Id
+    df.index = df.Id.astype('int')
     del df['Id']
     return df
 
