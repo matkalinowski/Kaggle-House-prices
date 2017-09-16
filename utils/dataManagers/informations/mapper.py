@@ -578,14 +578,5 @@ nan_value_mappings = {
     'GarageCond': 'No Garage',
     'GarageQual': 'No Garage',
     'GarageFinish': 'No Garage',
-    # #test data mapping- using most frequent data in train dataset
-    # 'MSZoning': 'RL',
-    # 'Utilities': 'AllPub',
-    # 'Exterior1st': 'VinylSd',
-    # 'Exterior2nd': 'VinylSd',
-    # 'MasVnrType': 'None',
-    # 'KitchenQual': 'TA',
-    # 'Functional': 'Typ',
-    # 'SaleType': 'WD'
 
 }
