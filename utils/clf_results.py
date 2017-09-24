@@ -32,7 +32,8 @@ def plot_best_predictors(best, tick_spacing=7000):
 
 
 class clfResult(object):
-    def __init__(self, clf, name, columns, predictions, store_classifier=None, store_predictions=None):
+    def __init__(self, clf, name, columns, predictions, parameters, store_classifier=None, store_predictions=None):
+        self.parameters = parameters
         self.predictions = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
         self.predictions.index.name = 'Id'
         self.columns = columns
@@ -40,7 +41,7 @@ class clfResult(object):
         self.name = name
         self.coefficients = pd.Series(self.clf.coef_, index=self.columns)
         if store_classifier:
-            save_classifier(clf, self.name)
+            save_classifier(self.clf, self.name)
         if store_predictions:
             self.predictions.to_csv(f'scores/{self.name}.csv')
 
@@ -49,6 +50,9 @@ class clfResult(object):
 
     def get_excluded_columns(self):
         return get_excluded_columns(self.coefficients)
+
+    def store_classifier(self):
+        save_classifier(self.clf, self.name)
 
     def plot_best_predictors(self, predictors_count=10, tick_spacing=7000):
         best_cols = self.get_most_important_columns(predictors_count)
