@@ -31,11 +31,16 @@ def plot_best_predictors(best, tick_spacing=7000):
     ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
 
 
+def get_predictions_df(predictions):
+    df = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
+    df.index.name = 'Id'
+    return df
+
+
 class clfResult(object):
     def __init__(self, clf, name, columns, predictions, parameters, store_classifier=None, store_predictions=None):
         self.parameters = parameters
-        self.predictions = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
-        self.predictions.index.name = 'Id'
+        self.predictions = get_predictions_df(predictions)
         self.columns = columns
         self.clf = clf
         self.name = name
