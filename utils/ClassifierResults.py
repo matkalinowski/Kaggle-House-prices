@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn.externals import joblib
 
+from utils.plots.plotter import PredictionsPlotter
+
 
 def get_most_important_columns(series, columns_count=10):
     return list(np.abs(series).sort_values()[-columns_count:].index)
@@ -34,10 +36,13 @@ def get_submission_from_predictions(predictions, predictions_file_name=None):
 
 
 class ClassifierResults(object):
-    def __init__(self, grid, name, columns, predictions, store_classifier=None, store_predictions=None):
+    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier=None,
+                 store_predictions=None):
         self.grid = grid
         self.parameters = grid.best_params_
-        self.predictions = get_predictions_df(predictions)
+        self.train_predictions = train_predictions
+        self.test_predictions = get_predictions_df(test_predictions)
+        self.ytrain = ytrain
         self.columns = columns
         self.clf = grid.best_estimator_
         self.name = name
@@ -45,7 +50,7 @@ class ClassifierResults(object):
         if store_classifier:
             save_classifier(self.clf, self.name)
         if store_predictions:
-            self.predictions.to_csv(f'scores/{self.name}.csv')
+            self.test_predictions.to_csv(f'scores/{self.name}.csv')
 
     def get_most_important_columns(self, columns_count=10):
         return get_most_important_columns(self.coefficients, columns_count)
@@ -55,3 +60,21 @@ class ClassifierResults(object):
 
     def store_classifier(self):
         save_classifier(self.clf, self.name)
+
+    def plot_results(self, plot_best_predictors=True, plot_train_vs_test=True,
+                     plot_actual_vs_predicted_test=True,
+                     plot_results_distplot=True, results_distplot_bins=None):
+
+        pp = PredictionsPlotter(self.grid)
+        if plot_best_predictors:
+            pp.plot_best_predictors(self, 20)
+        if plot_train_vs_test:
+            if 'alpha' in self.grid.param_grid:
+                pp.plot_train_vs_test_score_for_linear_clf(self.grid.param_grid['alpha'])
+            else:
+                raise NotImplemented(
+                    'Train vs test score is not implemented for other algorithms than linear regression yet.')
+        if plot_actual_vs_predicted_test:
+            pp.plot_actual_vs_predicted_train_scores(self.train_predictions, self.ytrain)
+        if plot_results_distplot:
+            pp.plot_results_distplot(self.train_predictions, self.ytrain, bins=results_distplot_bins)

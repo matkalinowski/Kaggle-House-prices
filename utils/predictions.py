@@ -4,7 +4,6 @@ from sklearn.preprocessing import StandardScaler
 
 from utils.ClassifierResults import ClassifierResults
 from utils.dataManagers.dataWrangler import *
-from utils.plots.plotter import PredictionsPlotter
 
 
 def get_df_for_predictions(train, test, standardize=True):
@@ -31,12 +30,9 @@ def get_df_for_predictions(train, test, standardize=True):
 
 
 def predict(clf, param_grid, xtrain, ytrain, xtest, name,
-            store_classifier=False, store_predictions=True,
-            plot_best_predictors=True, plot_train_vs_test=True,
-            plot_actual_vs_predicted_test=True,
-            plot_results_distplot=True, results_distplot_bins=None,
-            predictions_form_restoring_method=None):
-    grid = GridSearchCV(clf, param_grid, scoring='neg_mean_squared_log_error')
+            plot_results=True, store_classifier=False, store_predictions=True,
+            predictions_form_restoring_method=None, njobs=-1):
+    grid = GridSearchCV(clf, param_grid, scoring='neg_mean_squared_log_error', n_jobs=njobs)
     grid.fit(xtrain, ytrain)
 
     test_predictions = grid.predict(xtest)
@@ -47,16 +43,8 @@ def predict(clf, param_grid, xtrain, ytrain, xtest, name,
         ytrain = predictions_form_restoring_method(ytrain)
 
     results = ClassifierResults(grid, name, xtest.columns,
-                                test_predictions, store_classifier=store_classifier,
+                                train_predictions, test_predictions, ytrain, store_classifier=store_classifier,
                                 store_predictions=store_predictions)
-
-    pp = PredictionsPlotter(grid)
-    if plot_best_predictors:
-        pp.plot_best_predictors(results, 20)
-    if plot_train_vs_test:
-        pp.plot_train_vs_test_score_for_linear_clf(param_grid['alpha'])
-    if plot_actual_vs_predicted_test:
-        pp.plot_actual_vs_predicted_train_scores(train_predictions, ytrain)
-    if plot_results_distplot:
-        pp.plot_results_distplot(train_predictions, ytrain, np.log1p, bins=results_distplot_bins)
-    return results, grid
+    if plot_results:
+        results.plot_results()
+    return results

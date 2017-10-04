@@ -44,11 +44,7 @@ class PredictionsPlotter(object):
         ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
 
     @staticmethod
-    def plot_results_distplot(predictions, ytrain, transformation_to_visualize=None, bins=None):
-        if transformation_to_visualize is not None:
-            predictions = transformation_to_visualize(predictions)
-            ytrain = transformation_to_visualize(ytrain)
-
+    def plot_results_distplot(predictions, ytrain, bins=None):
         fig, ax = plt.subplots(nrows=3, figsize=[10, 6], tight_layout=True)
         sns.distplot(predictions, ax=ax[0], bins=bins)
         ax[0].set_title('Predictions.')
