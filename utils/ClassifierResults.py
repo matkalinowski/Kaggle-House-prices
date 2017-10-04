@@ -1,10 +1,7 @@
 import datetime
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from sklearn.externals import joblib
 
 
@@ -23,26 +20,26 @@ def save_classifier(classifier, clf_name=None, clf_folder='classifiers/'):
     joblib.dump(classifier, clf_folder + clf_name + '.pkl', compress=9)
 
 
-def plot_best_predictors(best, tick_spacing=7000):
-    fig, ax = plt.subplots(figsize=[9, 9])
-    sns.barplot(best, best.index, ax=ax)
-    ax.set_axisbelow(False)
-    ax.xaxis.grid(color='w', linestyle='solid')
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-
-
 def get_predictions_df(predictions):
     df = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
     df.index.name = 'Id'
     return df
 
 
-class clfResult(object):
-    def __init__(self, clf, name, columns, predictions, parameters, store_classifier=None, store_predictions=None):
-        self.parameters = parameters
+def get_submission_from_predictions(predictions, predictions_file_name=None):
+    df = get_predictions_df(predictions)
+    if predictions_file_name:
+        df.to_csv(f'scores/{predictions_file_name}.csv')
+    return df
+
+
+class ClassifierResults(object):
+    def __init__(self, grid, name, columns, predictions, store_classifier=None, store_predictions=None):
+        self.grid = grid
+        self.parameters = grid.best_params_
         self.predictions = get_predictions_df(predictions)
         self.columns = columns
-        self.clf = clf
+        self.clf = grid.best_estimator_
         self.name = name
         self.coefficients = pd.Series(self.clf.coef_, index=self.columns)
         if store_classifier:
@@ -58,7 +55,3 @@ class clfResult(object):
 
     def store_classifier(self):
         save_classifier(self.clf, self.name)
-
-    def plot_best_predictors(self, predictors_count=10, tick_spacing=7000):
-        best_cols = self.get_most_important_columns(predictors_count)
-        plot_best_predictors(self.coefficients[best_cols], tick_spacing)
