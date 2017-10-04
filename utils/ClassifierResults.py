@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.externals import joblib
 
-from utils.plots.plotter import PredictionsPlotter
+from utils.plots.plotter import ResultsPlotter
 
 
 def get_most_important_columns(series, columns_count=10):
@@ -61,20 +61,16 @@ class ClassifierResults(object):
     def store_classifier(self):
         save_classifier(self.clf, self.name)
 
-    def plot_results(self, plot_best_predictors=True, plot_train_vs_test=True,
+    def plot_results(self, plot_best_predictors=True, plot_train_vs_test_for_linear_clf=True,
                      plot_actual_vs_predicted_test=True,
                      plot_results_distplot=True, results_distplot_bins=None):
 
-        pp = PredictionsPlotter(self.grid)
+        pp = ResultsPlotter(self)
         if plot_best_predictors:
-            pp.plot_best_predictors(self, 20)
-        if plot_train_vs_test:
-            if 'alpha' in self.grid.param_grid:
-                pp.plot_train_vs_test_score_for_linear_clf(self.grid.param_grid['alpha'])
-            else:
-                raise NotImplemented(
-                    'Train vs test score is not implemented for other algorithms than linear regression yet.')
+            pp.plot_best_predictors(predictors_count=20)
+        if plot_train_vs_test_for_linear_clf:
+                pp.plot_train_vs_test_score_for_linear_clf()
         if plot_actual_vs_predicted_test:
-            pp.plot_actual_vs_predicted_train_scores(self.train_predictions, self.ytrain)
+            pp.plot_actual_vs_predicted_train_scores()
         if plot_results_distplot:
-            pp.plot_results_distplot(self.train_predictions, self.ytrain, bins=results_distplot_bins)
+            pp.plot_results_distplot(bins=results_distplot_bins)
