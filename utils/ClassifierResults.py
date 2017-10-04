@@ -46,7 +46,6 @@ class ClassifierResults(object):
         self.columns = columns
         self.clf = grid.best_estimator_
         self.name = name
-        self.coefficients = pd.Series(self.clf.coef_, index=self.columns)
         if store_classifier:
             save_classifier(self.clf, self.name)
         if store_predictions:
@@ -64,13 +63,33 @@ class ClassifierResults(object):
     def plot_results(self, plot_best_predictors=True, plot_train_vs_test_for_linear_clf=True,
                      plot_actual_vs_predicted_test=True,
                      plot_results_distplot=True, results_distplot_bins=None):
+        raise NotImplemented('Results plotting should be implemented in specific classifier results')
 
+
+class RegressionResults(ClassifierResults):
+    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier=None,
+                 store_predictions=None):
+        super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier,
+                         store_predictions)
+        self.coefficients = pd.Series(self.clf.coef_, index=self.columns)
+
+    def plot_results(self, plot_best_predictors=True, plot_train_vs_test_for_linear_clf=True,
+                     plot_actual_vs_predicted_test=True,
+                     plot_results_distplot=True, results_distplot_bins=None):
         pp = ResultsPlotter(self)
         if plot_best_predictors:
             pp.plot_best_predictors(predictors_count=20)
         if plot_train_vs_test_for_linear_clf:
-                pp.plot_train_vs_test_score_for_linear_clf()
+            pp.plot_train_vs_test_score_for_linear_clf()
         if plot_actual_vs_predicted_test:
             pp.plot_actual_vs_predicted_train_scores()
         if plot_results_distplot:
             pp.plot_results_distplot(bins=results_distplot_bins)
+
+
+class TreeResults(ClassifierResults):
+    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier=None,
+                 store_predictions=None):
+        super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier,
+                         store_predictions)
+        self.coefficients = pd.Series(self.clf.feature_importances_, index=self.columns)

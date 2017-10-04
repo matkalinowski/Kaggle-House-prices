@@ -2,7 +2,6 @@ import pandas as pd
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import StandardScaler
 
-from utils.ClassifierResults import ClassifierResults
 from utils.dataManagers.dataWrangler import *
 
 
@@ -29,7 +28,7 @@ def get_df_for_predictions(train, test, standardize=True):
     return df.iloc[:train.shape[0], :], df.iloc[train.shape[0]:, :]
 
 
-def predict(clf, param_grid, xtrain, ytrain, xtest, name,
+def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, name,
             plot_results=True, store_classifier=False, store_predictions=True,
             predictions_form_restoring_method=None, njobs=-1):
     grid = GridSearchCV(clf, param_grid, scoring='neg_mean_squared_log_error', n_jobs=njobs)
@@ -42,9 +41,9 @@ def predict(clf, param_grid, xtrain, ytrain, xtest, name,
         train_predictions = predictions_form_restoring_method(train_predictions)
         ytrain = predictions_form_restoring_method(ytrain)
 
-    results = ClassifierResults(grid, name, xtest.columns,
-                                train_predictions, test_predictions, ytrain, store_classifier=store_classifier,
-                                store_predictions=store_predictions)
+    results = results_class(grid, name, xtest.columns,
+                            train_predictions, test_predictions, ytrain, store_classifier=store_classifier,
+                            store_predictions=store_predictions)
     if plot_results:
         results.plot_results()
     return results
