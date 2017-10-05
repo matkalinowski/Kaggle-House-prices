@@ -38,6 +38,7 @@ def get_submission_from_predictions(predictions, predictions_file_name=None):
 class ClassifierResults(object):
     def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier=None,
                  store_predictions=None):
+        self.coefficients = None
         self.grid = grid
         self.parameters = grid.best_params_
         self.train_predictions = train_predictions
@@ -45,6 +46,7 @@ class ClassifierResults(object):
         self.ytrain = ytrain
         self.columns = columns
         self.clf = grid.best_estimator_
+
         self.name = name
         if store_classifier:
             save_classifier(self.clf, self.name)
@@ -52,18 +54,29 @@ class ClassifierResults(object):
             self.test_predictions.to_csv(f'scores/{self.name}.csv')
 
     def get_most_important_columns(self, columns_count=10):
+        if self.coefficients is None:
+            raise AttributeError('self.coefficients attribute should be initialized in children class')
         return get_most_important_columns(self.coefficients, columns_count)
 
     def get_excluded_columns(self):
+        if self.coefficients is None:
+            raise AttributeError('self.coefficients attribute should be initialized in children class')
         return get_excluded_columns(self.coefficients)
 
     def store_classifier(self):
         save_classifier(self.clf, self.name)
 
-    def plot_results(self, plot_best_predictors=True, plot_train_vs_test_for_linear_clf=True,
-                     plot_actual_vs_predicted_test=True,
-                     plot_results_distplot=True, results_distplot_bins=None):
-        raise NotImplemented('Results plotting should be implemented in specific classifier results')
+    def plot_results(self, plot_best_predictors=True, plot_actual_vs_predicted_test=True,
+                     plot_results_distplot=True, plot_train_vs_test=True, results_distplot_bins=None):
+        results_plotter = ResultsPlotter(self)
+        if plot_best_predictors:
+            results_plotter.plot_best_predictors(predictors_count=20)
+        if plot_actual_vs_predicted_test:
+            results_plotter.plot_actual_vs_predicted_train_scores()
+        if plot_results_distplot:
+            results_plotter.plot_results_distplot(bins=results_distplot_bins)
+        if plot_train_vs_test:
+            results_plotter.plot_multiple_parameters_train_vs_test()
 
 
 class RegressionResults(ClassifierResults):
@@ -72,19 +85,6 @@ class RegressionResults(ClassifierResults):
         super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, store_classifier,
                          store_predictions)
         self.coefficients = pd.Series(self.clf.coef_, index=self.columns)
-
-    def plot_results(self, plot_best_predictors=True, plot_train_vs_test_for_linear_clf=True,
-                     plot_actual_vs_predicted_test=True,
-                     plot_results_distplot=True, results_distplot_bins=None):
-        pp = ResultsPlotter(self)
-        if plot_best_predictors:
-            pp.plot_best_predictors(predictors_count=20)
-        if plot_train_vs_test_for_linear_clf:
-            pp.plot_train_vs_test_score_for_linear_clf()
-        if plot_actual_vs_predicted_test:
-            pp.plot_actual_vs_predicted_train_scores()
-        if plot_results_distplot:
-            pp.plot_results_distplot(bins=results_distplot_bins)
 
 
 class TreeResults(ClassifierResults):

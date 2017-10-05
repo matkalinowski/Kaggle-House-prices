@@ -1,7 +1,15 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
+import pandas as pd
 import seaborn as sns
+
+
+def createQuery(best_params):
+    query = ''
+    for p in best_params:
+        query += f'({p} == {best_params[p]}) and '
+    return query.replace('None', '-1')[:-5]
 
 
 class ResultsPlotter(object):
@@ -52,3 +60,34 @@ class ResultsPlotter(object):
         sns.distplot(self.results.ytrain, ax=ax[2], bins=bins)
         sns.distplot(self.results.train_predictions, ax=ax[2], bins=bins)
         ax[2].set_title('Actual and predictions.')
+
+    def plot_multiple_parameters_train_vs_test(self):
+        grid = self.results.grid
+        df = pd.DataFrame(grid.cv_results_['params'])
+        df.fillna(-1, inplace=True)
+
+        query = createQuery(grid.best_params_)
+        best_params_index = df.query(query).index
+
+        checked_params = [str(cv_result) for cv_result in grid.cv_results_['params']]
+        fig, ax = plt.subplots(figsize=[10, 10], tight_layout=True)
+
+        df['train_score'] = np.sqrt(-grid.cv_results_['mean_train_score'])
+        df['test_score'] = np.sqrt(-grid.cv_results_['mean_test_score'])
+
+        ax.scatter(x=range(len(checked_params)), y=df.test_score)
+        ax.plot(df.test_score, label='test val score')
+
+        ax.scatter(x=range(len(checked_params)), y=df.train_score)
+        ax.plot(df.train_score, label='cross val score')
+        plt.axvline(x=best_params_index, color='r', label=f'Choosed parameters: {grid.best_params_}')
+
+        locator = ticker.MultipleLocator()
+        ax.xaxis.set_major_locator(locator)
+        ax.set_xticks(np.arange(len(checked_params)))
+        _ = ax.set_xticklabels(checked_params, rotation=90)
+
+        plt.legend()
+        plt.title('Train vs test scores error.')
+        plt.xlabel('Alpha values')
+        plt.ylabel('Root mean squared log error')
