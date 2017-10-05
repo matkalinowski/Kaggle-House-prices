@@ -35,6 +35,7 @@ class ResultsPlotter(object):
         ax.set_axisbelow(False)
         ax.xaxis.grid(color='w', linestyle='solid')
         ax.xaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+        plt.xticks(rotation=90)
 
     def plot_results_distplot(self, bins=None):
         fig, ax = plt.subplots(nrows=3, figsize=[10, 6], tight_layout=True)
