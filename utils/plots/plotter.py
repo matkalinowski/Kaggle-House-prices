@@ -8,7 +8,10 @@ import seaborn as sns
 def createQuery(best_params):
     query = ''
     for p in best_params:
-        query += f'({p} == {best_params[p]}) and '
+        if type(best_params[p]) == str:
+            query += f'({p} == \'{best_params[p]}\') and '
+        else:
+            query += f'({p} == {best_params[p]}) and '
     return query.replace('None', '-1')[:-5]
 
 
@@ -41,7 +44,7 @@ class ResultsPlotter(object):
         plt.xlabel('Predictions')
         plt.ylabel('Actual')
 
-    def plot_best_predictors(self, predictors_count=10, tick_spacing=7000):
+    def plot_best_predictors(self, predictors_count=10, tick_spacing=.01):
         best_cols = self.results.get_most_important_columns(predictors_count)
         best = self.results.coefficients[best_cols]
 
