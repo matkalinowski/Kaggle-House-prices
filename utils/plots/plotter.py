@@ -55,7 +55,7 @@ class ResultsPlotter(object):
         query = createQuery(grid.best_params_)
         best_params_index = df.query(query).index
 
-        checked_params = [str(cv_result) for cv_result in grid.cv_results_['params']]
+        checked_params = [str(cv_result).replace('{', '').replace('}', '') for cv_result in grid.cv_results_['params']]
         fig, ax = plt.subplots(figsize=[10, 10], tight_layout=True)
 
         df['train_score'] = np.sqrt(-grid.cv_results_['mean_train_score'])
