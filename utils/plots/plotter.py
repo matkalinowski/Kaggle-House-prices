@@ -67,7 +67,7 @@ class ResultsPlotter(object):
             preds = self.results.train_predictions
 
             diff = pd.Series(values_transformation(preds) - values_transformation(y))
-            plot_residuals(diff, f'Residual plot with {type(values_transformation)} method used.')
+            plot_residuals(diff, f'Residual plot with {values_transformation} method used.')
 
     def plot_best_predictors(self, predictors_count=10, tick_spacing=.01):
         best_cols = self.results.get_most_important_columns(predictors_count)
