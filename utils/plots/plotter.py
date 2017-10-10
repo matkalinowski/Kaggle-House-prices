@@ -3,6 +3,7 @@ import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib import gridspec
 
 
 def createQuery(best_params):
@@ -15,6 +16,36 @@ def createQuery(best_params):
     return query.replace('None', '-1')[:-5]
 
 
+def plot_residuals(diff, title):
+    fig = plt.figure(figsize=[10, 6])
+    gs = gridspec.GridSpec(nrows=2, ncols=3, width_ratios=[2, 1, 1])
+    ax = plt.subplot(gs[:, :-1])
+
+    sns.regplot(diff.index.values, diff, ax=ax)
+    diff_mean = diff.mean()
+    diff_std = diff.std()
+    outliers = diff[(diff > diff_mean + 3 * diff_std) | (diff < diff_mean - 3 * diff_std)]
+
+    ax.fill_between(diff.index.values, diff_mean + 2 * diff_std, diff_mean - 2 * diff_std, alpha=.4,
+                    label='2 std of the mean')
+    ax.fill_between(diff.index.values, diff_mean + 3 * diff_std, diff_mean - 3 * diff_std, alpha=.2,
+                    label='3 std of the mean')
+    diff.describe().round(5)
+    ax.legend()
+    ax.set_title(title)
+    ax.grid(color='black', linestyle='-', linewidth=.1)
+
+    ax = plt.subplot(gs[0, -1])
+    ax.axis('off')
+    diff_info = diff.describe()[['mean', 'std', '50%', 'min', 'max']].round(5).to_frame()
+    table = ax.table(cellText=diff_info.values.astype('str'), rowLabels=diff_info.index.values, loc='right')
+    table.set_fontsize(12)
+
+    ax = plt.subplot(gs[1, -1])
+    ax.axis('off')
+    ax.text(.05, .9, f'Number of outliers = {outliers.count()}\nOutliers ids: {outliers.index.values}', fontsize=12)
+
+
 class ResultsPlotter(object):
     def __init__(self, results):
         self.results = results
@@ -25,6 +56,18 @@ class ResultsPlotter(object):
         plt.title('Actual vs predicted train scores.')
         plt.xlabel('Predictions')
         plt.ylabel('Actual')
+
+    def plot_residuals_for_train_data_set(self, values_transformation=None):
+        y = self.results.ytrain
+        diff = pd.Series(self.results.train_predictions - y)
+        plot_residuals(diff, 'Residual plot')
+
+        if values_transformation is not None:
+            y = self.results.ytrain
+            preds = self.results.train_predictions
+
+            diff = pd.Series(values_transformation(preds) - values_transformation(y))
+            plot_residuals(diff, f'Residual plot with {type(values_transformation)} method used.')
 
     def plot_best_predictors(self, predictors_count=10, tick_spacing=.01):
         best_cols = self.results.get_most_important_columns(predictors_count)

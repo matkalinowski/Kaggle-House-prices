@@ -53,6 +53,15 @@ class ClassifierResults(object):
         if store_predictions:
             self.test_predictions.to_csv(f'scores/{self.name}.csv')
 
+    def __repr__(self):
+        return f'Results of {type(self.clf)} with given name: {self.name}.'
+
+    def refit(self, X, y):
+        self.ytrain = y
+        self.grid.fit(X, y)
+        self.clf = self.grid.best_estimator_
+        self.train_predictions = self.grid.predict(X)
+
     def get_most_important_columns(self, columns_count=10):
         if self.coefficients is None:
             raise AttributeError('self.coefficients attribute should be initialized in children class')
@@ -67,12 +76,15 @@ class ClassifierResults(object):
         save_classifier(self.clf, self.name)
 
     def plot_results(self, plot_best_predictors=True, plot_actual_vs_predicted_test=True,
-                     plot_results_distplot=True, plot_train_vs_test=True, results_distplot_bins=None):
+                     plot_residuals_for_train_data_set=True, plot_results_distplot=True, plot_train_vs_test=True,
+                     results_distplot_bins=None, values_transformation=None):
         results_plotter = ResultsPlotter(self)
         if plot_best_predictors:
             results_plotter.plot_best_predictors(predictors_count=20)
         if plot_actual_vs_predicted_test:
             results_plotter.plot_actual_vs_predicted_train_scores()
+        if plot_residuals_for_train_data_set:
+            results_plotter.plot_residuals_for_train_data_set(values_transformation)
         if plot_results_distplot:
             results_plotter.plot_results_distplot(bins=results_distplot_bins)
         if plot_train_vs_test:

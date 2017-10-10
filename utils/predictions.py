@@ -30,7 +30,7 @@ def get_df_for_predictions(train, test, standardize=True):
 
 def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, name,
             plot_results=True, store_classifier=False, store_predictions=True,
-            predictions_form_restoring_method=None, n_jobs=-1, cv=5):
+            predictions_form_restoring_method=None, n_jobs=-1, cv=5, plot_values_transformation=np.log1p):
     grid = GridSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_log_error', n_jobs=n_jobs)
     grid.fit(xtrain, ytrain)
 
@@ -45,5 +45,5 @@ def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, name,
                             train_predictions, test_predictions, ytrain, store_classifier=store_classifier,
                             store_predictions=store_predictions)
     if plot_results:
-        results.plot_results()
+        results.plot_results(values_transformation=plot_values_transformation)
     return results
