@@ -16,34 +16,42 @@ def createQuery(best_params):
     return query.replace('None', '-1')[:-5]
 
 
-def plot_residuals(diff, title):
+def plot_confidence_interval(ax, index, mean, std, dataset_type, std_count=2):
+    ax.fill_between(index, mean - std_count * std, mean + std_count * std, alpha=std_count / 20,
+                    label=f'{std_count}sd of score mean- {dataset_type}')
+
+
+def plot_residuals(actual, predicted, title):
+    diff = pd.Series(actual - predicted)
+
     fig = plt.figure(figsize=[10, 6])
     gs = gridspec.GridSpec(nrows=2, ncols=3, width_ratios=[2, 1, 1])
-    ax = plt.subplot(gs[:, :-1])
+    ax = fig.add_subplot(gs[:, :-1])
 
-    sns.regplot(diff.index.values, diff, ax=ax)
+    sns.regplot(predicted, diff, ax=ax)
     diff_mean = diff.mean()
     diff_std = diff.std()
-    outliers = diff[(diff > diff_mean + 3 * diff_std) | (diff < diff_mean - 3 * diff_std)]
+    outliers = diff[(diff.values > diff_mean + 3 * diff_std) | (diff.values < diff_mean - 3 * diff_std)]
 
-    ax.fill_between(diff.index.values, diff_mean + 2 * diff_std, diff_mean - 2 * diff_std, alpha=.4,
-                    label='2 std of the mean')
-    ax.fill_between(diff.index.values, diff_mean + 3 * diff_std, diff_mean - 3 * diff_std, alpha=.2,
-                    label='3 std of the mean')
-    diff.describe().round(5)
+    plot_confidence_interval(ax, diff.index.values, diff_mean, diff_std, dataset_type='train', std_count=2)
+    plot_confidence_interval(ax, diff.index.values, diff_mean, diff_std, dataset_type='train', std_count=3)
+
     ax.legend()
     ax.set_title(title)
+    ax.set_ylabel('Residuals')
+    ax.set_xlabel('Predicted sale price')
     ax.grid(color='black', linestyle='-', linewidth=.1)
 
-    ax = plt.subplot(gs[0, -1])
+    ax = fig.add_subplot(gs[0, -1])
     ax.axis('off')
     diff_info = diff.describe()[['mean', 'std', '50%', 'min', 'max']].round(5).to_frame()
     table = ax.table(cellText=diff_info.values.astype('str'), rowLabels=diff_info.index.values, loc='right')
     table.set_fontsize(12)
 
-    ax = plt.subplot(gs[1, -1])
+    ax = fig.add_subplot(gs[1, -1])
     ax.axis('off')
     ax.text(.05, .9, f'Number of outliers = {outliers.count()}\nOutliers ids: {outliers.index.values}', fontsize=12)
+    return fig, outliers
 
 
 class ResultsPlotter(object):
@@ -51,23 +59,23 @@ class ResultsPlotter(object):
         self.results = results
 
     def plot_actual_vs_predicted_train_scores(self):
-        fig, ax = plt.subplots()
-        sns.regplot(self.results.train_predictions, self.results.ytrain, ax=ax)
+        fig, ax = plt.subplots(figsize=[8, 8])
+        sns.regplot(self.results.train_predictions, self.results.ytrain, ax=ax, ci=99, label='results')
+        ideal = np.linspace(self.results.ytrain.min(), self.results.ytrain.max())
+        plt.plot(ideal, ideal, c='r', linewidth=.5, label='ideal values line')
         plt.title('Actual vs predicted train scores.')
         plt.xlabel('Predictions')
         plt.ylabel('Actual')
+        plt.legend()
 
     def plot_residuals_for_train_data_set(self, values_transformation=None):
         y = self.results.ytrain
-        diff = pd.Series(self.results.train_predictions - y)
-        plot_residuals(diff, 'Residual plot')
+        plot_residuals(y, self.results.train_predictions, 'Residual plot')
 
         if values_transformation is not None:
-            y = self.results.ytrain
-            preds = self.results.train_predictions
-
-            diff = pd.Series(values_transformation(preds) - values_transformation(y))
-            plot_residuals(diff, f'Residual plot with {values_transformation} method used.')
+            y = values_transformation(self.results.ytrain)
+            predictions = values_transformation(self.results.train_predictions)
+            plot_residuals(y, predictions, f'Residual plot with {values_transformation} method used.')
 
     def plot_best_predictors(self, predictors_count=10, tick_spacing=.01):
         best_cols = self.results.get_most_important_columns(predictors_count)
@@ -90,7 +98,7 @@ class ResultsPlotter(object):
         sns.distplot(self.results.train_predictions, ax=ax[2], bins=bins)
         ax[2].set_title('Actual and predictions.')
 
-    def plot_multiple_parameters_train_vs_test(self):
+    def plot_multiple_parameters_train_vs_test(self, yscale='log', plot_confidence_intervals=True):
         grid = self.results.grid
         df = pd.DataFrame(grid.cv_results_['params'])
         df.fillna(-1, inplace=True)
@@ -99,16 +107,30 @@ class ResultsPlotter(object):
         best_params_index = df.query(query).index
 
         checked_params = [str(cv_result).replace('{', '').replace('}', '') for cv_result in grid.cv_results_['params']]
-        fig, ax = plt.subplots(figsize=[10, 10], tight_layout=True)
+        width_multiplier = df.shape[0] // 60 + 1
+        fig, ax = plt.subplots(figsize=[width_multiplier * 10, 10], tight_layout=True)
 
-        df['train_score'] = np.sqrt(-grid.cv_results_['mean_train_score'])
-        df['test_score'] = np.sqrt(-grid.cv_results_['mean_test_score'])
+        df['mean_train_score'] = np.sqrt(-grid.cv_results_['mean_train_score'])
+        df['mean_test_score'] = np.sqrt(-grid.cv_results_['mean_test_score'])
+        df['std_train_score'] = np.sqrt(grid.cv_results_['std_train_score'])
+        df['std_test_score'] = np.sqrt(grid.cv_results_['std_test_score'])
 
-        ax.scatter(x=range(len(checked_params)), y=df.test_score, label=None)
-        ax.plot(df.test_score, label='cross val score')
+        if plot_confidence_intervals:
+            plot_confidence_interval(ax, df.index.values, df.mean_test_score, df.std_test_score, std_count=2,
+                                     dataset_type='cv')
+            plot_confidence_interval(ax, df.index.values, df.mean_test_score, df.std_test_score, std_count=3,
+                                     dataset_type='cv')
 
-        ax.scatter(x=range(len(checked_params)), y=df.train_score, label=None)
-        ax.plot(df.train_score, label='train score')
+            plot_confidence_interval(ax, df.index.values, df.mean_train_score, df.std_train_score, std_count=2,
+                                     dataset_type='train')
+            plot_confidence_interval(ax, df.index.values, df.mean_train_score, df.std_train_score, std_count=3,
+                                     dataset_type='train')
+
+        ax.scatter(x=range(len(checked_params)), y=df.mean_test_score, label=None)
+        ax.plot(df.mean_test_score, label='cross val score')
+
+        ax.scatter(x=range(len(checked_params)), y=df.mean_train_score, label=None)
+        ax.plot(df.mean_train_score, label='train score')
         plt.axvline(x=best_params_index, color='r', label=f'Choosed parameters: {grid.best_params_}')
 
         locator = ticker.MultipleLocator()
@@ -117,7 +139,8 @@ class ResultsPlotter(object):
         ax.set_xticklabels(checked_params, rotation=90)
         ax.grid(color='black', linestyle='-', linewidth=.1)
 
-        plt.legend()
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.title('Train vs test scores error.')
         plt.xlabel('Parameter values')
         plt.ylabel('Root mean squared log error')
+        plt.yscale(yscale)
