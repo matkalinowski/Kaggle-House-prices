@@ -5,6 +5,8 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import gridspec
 
+from utils.predictions import get_restored_predictions
+
 
 def createQuery(best_params):
     query = ''
@@ -54,6 +56,18 @@ def plot_residuals(actual, predicted, title):
     return fig, outliers
 
 
+def normal_probability(ax, predictions, label):
+    ys = predictions.sort_values()
+    n = len(ys)
+    xs = np.random.normal(0, 1, n)
+    xs.sort()
+    ax.plot(xs, ys, label=label)
+    plt.xlabel('Standard deviations from mean')
+    plt.ylabel('Predictions')
+    plt.title('Normal probability plot')
+    plt.legend()
+
+
 class ResultsPlotter(object):
     def __init__(self, results):
         self.results = results
@@ -68,14 +82,13 @@ class ResultsPlotter(object):
         plt.ylabel('Actual')
         plt.legend()
 
-    def plot_residuals_for_train_data_set(self, values_transformation=None):
+    def plot_residuals_for_train_data_set(self):
         y = self.results.ytrain
         plot_residuals(y, self.results.train_predictions, 'Residual plot')
 
-        if values_transformation is not None:
-            y = values_transformation(self.results.ytrain)
-            predictions = values_transformation(self.results.train_predictions)
-            plot_residuals(y, predictions, f'Residual plot with {values_transformation} method used.')
+        if self.results.restored_dict:
+            _, train_predictions, y = get_restored_predictions(self.results.restored_dict)
+            plot_residuals(y, train_predictions, f'Residual plot with values restored.')
 
     def plot_best_predictors(self, predictors_count=10, tick_spacing=.01):
         best_cols = self.results.get_most_important_columns(predictors_count)
@@ -144,3 +157,16 @@ class ResultsPlotter(object):
         plt.xlabel('Parameter values')
         plt.ylabel('Root mean squared log error')
         plt.yscale(yscale)
+
+    def plot_normal_probability(self):
+        results = self.results
+
+        fig, ax = plt.subplots(figsize=[8, 8])
+        normal_probability(ax, results.train_predictions, 'predicted')
+        normal_probability(ax, results.ytrain, 'actual')
+
+        if results.restored_dict:
+            fig, ax = plt.subplots(figsize=[8, 8])
+            _, predictions, actual = get_restored_predictions(results.restored_dict)
+            normal_probability(ax, predictions, 'predicted')
+            normal_probability(ax, actual, 'actual')
