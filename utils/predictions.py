@@ -7,7 +7,8 @@ from sklearn.preprocessing import StandardScaler
 from utils.dataManagers.dataWrangler import *
 
 
-def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yield_progress=True):
+def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yield_progress=True,
+                       plot_best_results=True, predictions_form_restoring_method=None):
     kf = KFold(n_splits=folds, random_state=None, shuffle=False)
     errs = []
     res = []
@@ -17,16 +18,17 @@ def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yi
         x_train, x_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         results = predict(results_class, model, param_grid, x_train,
-                          np.log1p(y_train), test, name=None,
-                          predictions_form_restoring_method=restore_predictions_from_log1p,
+                          y_train, test, name=None,
+                          predictions_form_restoring_method=predictions_form_restoring_method,
                           plot_results=False)
-        errs.append(mean_squared_log_error(results.grid.predict(x_test), np.log1p(y_test)))
+        errs.append(mean_squared_log_error(results.grid.predict(x_test), y_test))
         res.append(results)
     errors = pd.Series(np.sqrt(errs))
     best_result_indx = errors.argmin()
     best_result = res[best_result_indx]
     best_result.refit(X, y)
-    best_result.plot_results()
+    if plot_best_results:
+        best_result.plot_results()
     if yield_progress:
         print(f'Best test error for model: {type(model)} is: {errors.min()}')
     return best_result

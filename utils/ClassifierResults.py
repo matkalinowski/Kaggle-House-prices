@@ -43,7 +43,7 @@ class ClassifierResults(object):
         self.coefficients = None
         self.grid = grid
         self.parameters = grid.best_params_
-        self.train_predictions = train_predictions
+        self.train_predictions = pd.Series(train_predictions, index=ytrain.index)
         self.test_predictions = get_predictions_df(test_predictions)
         self.ytrain = ytrain
         self.columns = columns
@@ -62,7 +62,7 @@ class ClassifierResults(object):
         self.ytrain = y
         self.grid.fit(X, y)
         self.clf = self.grid.best_estimator_
-        self.train_predictions = self.grid.predict(X)
+        self.train_predictions = pd.Series(self.grid.predict(X), index=X.index)
 
     def get_most_important_columns(self, columns_count=10):
         if self.coefficients is None:
@@ -93,7 +93,6 @@ class ClassifierResults(object):
             results_plotter.plot_multiple_parameters_train_vs_test()
         if plot_normal_probability:
             results_plotter.plot_normal_probability()
-
 
 
 class RegressionResults(ClassifierResults):
