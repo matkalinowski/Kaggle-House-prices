@@ -18,9 +18,9 @@ def createQuery(best_params):
     return query.replace('None', '-1')[:-5]
 
 
-def plot_confidence_interval(ax, index, mean, std, dataset_type, std_count=2):
+def plot_confidence_interval(ax, index, mean, std, additional_label_info, std_count=2):
     ax.fill_between(index, mean - std_count * std, mean + std_count * std, alpha=std_count / 20,
-                    label=f'{std_count}sd of score mean- {dataset_type}')
+                    label=f'{std_count}sd of score mean- {additional_label_info}')
 
 
 def plot_residuals(actual, predicted, title):
@@ -35,8 +35,9 @@ def plot_residuals(actual, predicted, title):
     diff_std = diff.std()
     outliers = diff[(diff.values > diff_mean + 3 * diff_std) | (diff.values < diff_mean - 3 * diff_std)]
 
-    plot_confidence_interval(ax, diff.index.values, diff_mean, diff_std, dataset_type='train', std_count=2)
-    plot_confidence_interval(ax, diff.index.values, diff_mean, diff_std, dataset_type='train', std_count=3)
+    conf_range = np.linspace(.9 * int(predicted.min()), 1.1 * int(predicted.max()))
+    plot_confidence_interval(ax, conf_range, diff_mean, diff_std, additional_label_info='train', std_count=2)
+    plot_confidence_interval(ax, conf_range, diff_mean, diff_std, additional_label_info='train', std_count=3)
 
     ax.legend()
     ax.set_title(title)
@@ -130,14 +131,14 @@ class ResultsPlotter(object):
 
         if plot_confidence_intervals:
             plot_confidence_interval(ax, df.index.values, df.mean_test_score, df.std_test_score, std_count=2,
-                                     dataset_type='cv')
+                                     additional_label_info='cv')
             plot_confidence_interval(ax, df.index.values, df.mean_test_score, df.std_test_score, std_count=3,
-                                     dataset_type='cv')
+                                     additional_label_info='cv')
 
             plot_confidence_interval(ax, df.index.values, df.mean_train_score, df.std_train_score, std_count=2,
-                                     dataset_type='train')
+                                     additional_label_info='train')
             plot_confidence_interval(ax, df.index.values, df.mean_train_score, df.std_train_score, std_count=3,
-                                     dataset_type='train')
+                                     additional_label_info='train')
 
         ax.scatter(x=range(len(checked_params)), y=df.mean_test_score, label=None)
         ax.plot(df.mean_test_score, label='cross val score')
