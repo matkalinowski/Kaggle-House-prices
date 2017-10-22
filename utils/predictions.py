@@ -35,6 +35,10 @@ class RegressionModel(object):
         self.results_class = results_class
         self.cv_fit_results = []
 
+    def get_min_val_error(self):
+        df = pd.DataFrame(self.cv_fit_results)
+        return df.val_err.min()
+
     def get_best_cv_estimator_grid(self):
         df = pd.DataFrame(self.cv_fit_results)
         return df.iloc[df.val_err.argmin()].grid, df.val_err.min()
@@ -70,6 +74,7 @@ class Ensembler(object):
         kf = KFold(n_splits=k_folds, random_state=None, shuffle=False)
         split_counter = 0
         for train_index, test_index in kf.split(x_train):
+            lap_start = datetime.datetime.now()
             self.kfold_splits_indexes.append([train_index, test_index])
             x_train_kf, x_val_kf, y_train_kf, y_val_kf = self._get_kfold_sets(x_train, y_train, train_index, test_index)
 
@@ -79,13 +84,14 @@ class Ensembler(object):
                                                        y_val_kf,
                                                        yield_progress, split_counter)
                 model.cv_fit_results.append(self._get_results_dict(split_counter, val_err, grid))
-            print('---')
+            lap_end = datetime.datetime.now()
+            print(f'kfold lap started at: {lap_start} and ended at: {lap_end}, took: {lap_end - lap_start}\n---')
             split_counter += 1
 
         for model in self.models:
             self._refit_trained_model(model, x_train, y_train, yield_progress)
 
-        self.print_calculations_time(yield_progress, start_time)
+        self._print_calculations_time(yield_progress, start_time)
 
     def _refit_trained_model(self, model, x_train, y_train, yield_progress):
         grid, val_err = model.get_best_cv_estimator_grid()
@@ -123,7 +129,7 @@ class Ensembler(object):
             return grid.predict(data)
 
     @staticmethod
-    def print_calculations_time(yield_progress, start):
+    def _print_calculations_time(yield_progress, start):
         end = datetime.datetime.now()
         if yield_progress:
             print(f'\nCalculations started at: {start} and ended at {end}, took: {end-start}')
@@ -143,7 +149,7 @@ class Ensembler(object):
 
         for i, grid in enumerate(self.best_grids):
             model = self.models[i]
-            test_predictions = pd.Series(grid.predict(x_test), index=x_test.index)
+            test_predictions = get_test_predictions_df(grid.predict(x_test))
             train_predictions = pd.Series(grid.predict(x_train), index=x_train.index)
             name = model.name + '_from(' + self.name + ')'
 
@@ -153,7 +159,8 @@ class Ensembler(object):
                                              train_predictions, y_train,
                                              predictions_form_restoring_method)
             res = model.results_class(grid, name, x_test.columns,
-                                      train_predictions, test_predictions, y_train, restored_data,
+                                      train_predictions, test_predictions, y_train, model.get_min_val_error(),
+                                      restored_data,
                                       store_classifier=store_classifier,
                                       store_predictions=store_predictions_score)
             if plot_best_results:
