@@ -3,7 +3,6 @@ import pickle
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
-from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 
 from utils.ClassifierResults import *
@@ -52,6 +51,7 @@ class Ensembler(object):
         self.models = models
         self.best_grids = []
         self.results = []
+        self.kfold_splits_indexes = []
 
     @staticmethod
     def _get_results_dict(split_counter, val_err, grid):
@@ -61,48 +61,59 @@ class Ensembler(object):
         result['grid'] = grid
         return result
 
+    @staticmethod
+    def _get_kfold_sets(x_train, y_train, train_index, test_index):
+        return x_train.iloc[train_index], x_train.iloc[test_index], y_train.iloc[train_index], y_train.iloc[test_index]
+
     def fit(self, x_train, y_train, k_folds=5, gridSearch_folds=5, n_jobs=-1, yield_progress=True):
-        start = datetime.datetime.now()
+        start_time = datetime.datetime.now()
         kf = KFold(n_splits=k_folds, random_state=None, shuffle=False)
         split_counter = 0
         for train_index, test_index in kf.split(x_train):
-            x_train_kf, x_val_kf = x_train.iloc[train_index], x_train.iloc[test_index]
-            y_train_kf, y_val_kf = y_train.iloc[train_index], y_train.iloc[test_index]
+            self.kfold_splits_indexes.append([train_index, test_index])
+            x_train_kf, x_val_kf, y_train_kf, y_val_kf = self._get_kfold_sets(x_train, y_train, train_index, test_index)
 
             for model in self.models:
-                if yield_progress:
-                    print(f'kfold number: {split_counter} for model: {model.name},'
-                          f' time is: {datetime.datetime.now()}')
-
-                grid = GridSearchCV(model.estimator, model.param_grid, cv=gridSearch_folds,
-                                    scoring='neg_mean_squared_error',
-                                    n_jobs=n_jobs)
-                if model.weights is not None:
-                    grid.fit(x_train_kf, y_train_kf, sample_weight=model.weights)
-                else:
-                    grid.fit(x_train_kf, y_train_kf)
-
-                val_err = mean_squared_error(np.expm1(grid.predict(x_val_kf)), np.expm1(y_val_kf))
-                if yield_progress:
-                    print(f'Current mean_squared_error on validation set(logged pred and output) is: {val_err}')
-
+                grid, val_err = self._fit_single_model(gridSearch_folds, model, n_jobs, x_train_kf, x_val_kf,
+                                                       y_train_kf,
+                                                       y_val_kf,
+                                                       yield_progress, split_counter)
                 model.cv_fit_results.append(self._get_results_dict(split_counter, val_err, grid))
             print('---')
             split_counter += 1
 
-        self.best_grids = []
         for model in self.models:
-            grid, val_err = model.get_best_cv_estimator_grid()
-            if yield_progress:
-                print(f'Refitting model {model.name}')
-                print(f'Best validation error for model: {model.name} is: {val_err},'
-                      f' chosen parameters are: {grid.best_params_}')
-            grid.fit(x_train, y_train)
-            self.best_grids.append(grid)
+            self._refit_trained_model(model, x_train, y_train, yield_progress)
 
-        end = datetime.datetime.now()
+        self.print_calculations_time(yield_progress, start_time)
+
+    def _refit_trained_model(self, model, x_train, y_train, yield_progress):
+        grid, val_err = model.get_best_cv_estimator_grid()
         if yield_progress:
-            print(f'\nCalculations started at: {start} and ended at {end}, took: {end-start}')
+            print(f'Refitting model {model.name}')
+            print(f'Best validation error for model: {model.name} is: {val_err},'
+                  f' chosen parameters are: {grid.best_params_}')
+        grid.fit(x_train, y_train)
+        self.best_grids.append(grid)
+        return grid
+
+    @staticmethod
+    def _fit_single_model(gridSearch_folds, model, n_jobs, x_train_kf, x_val_kf, y_train_kf, y_val_kf, yield_progress,
+                          split_counter):
+        if yield_progress:
+            print(f'kfold number: {split_counter} for model: {model.name},'
+                  f' time is: {datetime.datetime.now()}')
+        grid = GridSearchCV(model.estimator, model.param_grid, cv=gridSearch_folds,
+                            scoring='neg_mean_squared_error',
+                            n_jobs=n_jobs)
+        if model.weights is not None:
+            grid.fit(x_train_kf, y_train_kf, sample_weight=model.weights)
+        else:
+            grid.fit(x_train_kf, y_train_kf)
+        val_err = mean_squared_error(np.expm1(grid.predict(x_val_kf)), np.expm1(y_val_kf))
+        if yield_progress:
+            print(f'Current mean_squared_error on validation set(logged pred and output) is: {val_err}')
+        return grid, val_err
 
     @staticmethod
     def _get_predictions(grid, data, predictions_form_restoring_method=None):
@@ -110,6 +121,12 @@ class Ensembler(object):
             return predictions_form_restoring_method(grid.predict(data))
         else:
             return grid.predict(data)
+
+    @staticmethod
+    def print_calculations_time(yield_progress, start):
+        end = datetime.datetime.now()
+        if yield_progress:
+            print(f'\nCalculations started at: {start} and ended at {end}, took: {end-start}')
 
     def predict(self, x_test, predictions_form_restoring_method=None):
         results = []
@@ -157,38 +174,38 @@ class Ensembler(object):
         return result
 
 
-def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yield_progress=True,
-                       plot_best_results=True, predictions_form_restoring_method=None, n_jobs=-1, stoppingRounds=None):
-    start = datetime.datetime.now()
-    kf = KFold(n_splits=folds, random_state=None, shuffle=False)
-    errs = []
-    res = []
-    for train_index, test_index in kf.split(X):
-        if yield_progress:
-            print(f'iteration: {len(errs)} for class {type(model)}, time is: {datetime.datetime.now()}')
-        x_train, x_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-        results = predict(results_class, model, param_grid, x_train,
-                          y_train, test, stoppingRounds, name=None,
-                          predictions_form_restoring_method=predictions_form_restoring_method,
-                          plot_results=False, n_jobs=n_jobs)
-        errs.append(mean_squared_error(np.expm1(results.grid.predict(x_test)), np.expm1(y_test)))
-        if yield_progress:
-            print(f'Current error is: {errs[-1]}')
-        res.append(results)
-    errors = pd.Series(np.sqrt(errs))
-    best_result_indx = errors.argmin()
-    if yield_progress:
-        print(f'Best test error for model: {type(model)} is: {errors.min()}')
-        print('Refitting model.')
-    best_result = res[best_result_indx]
-    best_result.refit(X, y)
-    end = datetime.datetime.now()
-    if yield_progress:
-        print(f'Calculations started at: {start} and ended at {end}, took: {end-start}')
-    if plot_best_results:
-        best_result.plot_results()
-    return best_result
+# def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yield_progress=True,
+#                        plot_best_results=True, predictions_form_restoring_method=None, n_jobs=-1, stoppingRounds=None):
+#     start = datetime.datetime.now()
+#     kf = KFold(n_splits=folds, random_state=None, shuffle=False)
+#     errs = []
+#     res = []
+#     for train_index, test_index in kf.split(X):
+#         if yield_progress:
+#             print(f'iteration: {len(errs)} for class {type(model)}, time is: {datetime.datetime.now()}')
+#         x_train, x_test = X.iloc[train_index], X.iloc[test_index]
+#         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+#         results = predict(results_class, model, param_grid, x_train,
+#                           y_train, test, stoppingRounds, name=None,
+#                           predictions_form_restoring_method=predictions_form_restoring_method,
+#                           plot_results=False, n_jobs=n_jobs)
+#         errs.append(mean_squared_error(np.expm1(results.grid.predict(x_test)), np.expm1(y_test)))
+#         if yield_progress:
+#             print(f'Current error is: {errs[-1]}')
+#         res.append(results)
+#     errors = pd.Series(np.sqrt(errs))
+#     best_result_indx = errors.argmin()
+#     if yield_progress:
+#         print(f'Best test error for model: {type(model)} is: {errors.min()}')
+#         print('Refitting model.')
+#     best_result = res[best_result_indx]
+#     best_result.refit(X, y)
+#     end = datetime.datetime.now()
+#     if yield_progress:
+#         print(f'Calculations started at: {start} and ended at {end}, took: {end-start}')
+#     if plot_best_results:
+#         best_result.plot_results()
+#     return best_result
 
 
 def get_df_for_predictions(train, test, standardize=True):
@@ -214,33 +231,33 @@ def get_df_for_predictions(train, test, standardize=True):
     return df.iloc[:train.shape[0], :], df.iloc[train.shape[0]:, :]
 
 
-def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, weights, stoppingRounds=None, name=None,
-            plot_results=True, store_classifier=False, store_predictions=True,
-            predictions_form_restoring_method=None, n_jobs=-1, cv=5):
-    if stoppingRounds:
-        print('Performing RandomizedSearchCV.')
-        grid = RandomizedSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs,
-                                  n_iter=stoppingRounds)
-    else:
-        print('Performing GridSearchCV.')
-        grid = GridSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs)
-    grid.fit(xtrain, ytrain, sample_weight=weights)
-
-    test_predictions = pd.Series(grid.predict(xtest), index=xtest.index)
-    train_predictions = pd.Series(grid.predict(xtrain), index=xtrain.index)
-
-    restored_data = None
-    if predictions_form_restoring_method is not None:
-        restored_data = RestoredData(test_predictions,
-                                     train_predictions, ytrain, predictions_form_restoring_method)
-
-    results = results_class(grid, name, xtest.columns,
-                            train_predictions, test_predictions, ytrain, restored_data,
-                            store_classifier=store_classifier,
-                            store_predictions=store_predictions)
-    if plot_results:
-        results.plot_results()
-    return results
+# def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, weights, stoppingRounds=None, name=None,
+#             plot_results=True, store_classifier=False, store_predictions=True,
+#             predictions_form_restoring_method=None, n_jobs=-1, cv=5):
+#     if stoppingRounds:
+#         print('Performing RandomizedSearchCV.')
+#         grid = RandomizedSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs,
+#                                   n_iter=stoppingRounds)
+#     else:
+#         print('Performing GridSearchCV.')
+#         grid = GridSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs)
+#     grid.fit(xtrain, ytrain, sample_weight=weights)
+#
+#     test_predictions = pd.Series(grid.predict(xtest), index=xtest.index)
+#     train_predictions = pd.Series(grid.predict(xtrain), index=xtrain.index)
+#
+#     restored_data = None
+#     if predictions_form_restoring_method is not None:
+#         restored_data = RestoredData(test_predictions,
+#                                      train_predictions, ytrain, predictions_form_restoring_method)
+#
+#     results = results_class(grid, name, xtest.columns,
+#                             train_predictions, test_predictions, ytrain, restored_data,
+#                             store_classifier=store_classifier,
+#                             store_predictions=store_predictions)
+#     if plot_results:
+#         results.plot_results()
+#     return results
 
 
 class RestoredData(object):
