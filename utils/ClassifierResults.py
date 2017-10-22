@@ -22,29 +22,16 @@ def save_classifier(classifier, clf_name=None, clf_folder='classifiers/'):
     joblib.dump(classifier, clf_folder + clf_name + '.pkl', compress=9)
 
 
-def get_predictions_df(predictions):
-    df = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
-    df.index.name = 'Id'
-    return df
-
-
-def get_submission_from_predictions(predictions, predictions_file_name=None):
-    df = get_predictions_df(predictions)
-    if predictions_file_name:
-        df.to_csv(f'scores/{predictions_file_name}.csv')
-    return df
-
-
 class ClassifierResults(object):
-    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, restored_dict=None,
+    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, restored_data=None,
                  store_classifier=None,
                  store_predictions=None):
-        self.restored_dict = restored_dict
+        self.restored_data = restored_data
         self.coefficients = None
         self.grid = grid
         self.parameters = grid.best_params_
         self.train_predictions = pd.Series(train_predictions, index=ytrain.index)
-        self.test_predictions = get_predictions_df(test_predictions)
+        self.test_predictions = test_predictions
         self.ytrain = ytrain
         self.columns = columns
         self.clf = grid.best_estimator_
@@ -96,20 +83,20 @@ class ClassifierResults(object):
 
 
 class RegressionResults(ClassifierResults):
-    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, restored_dict,
+    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, restored_data,
                  store_classifier=None,
                  store_predictions=None):
-        super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, restored_dict,
+        super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, restored_data,
                          store_classifier,
                          store_predictions)
         self.coefficients = pd.Series(self.clf.coef_, index=self.columns)
 
 
 class TreeResults(ClassifierResults):
-    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, restored_dict,
+    def __init__(self, grid, name, columns, train_predictions, test_predictions, ytrain, restored_data,
                  store_classifier=None,
                  store_predictions=None):
-        super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, restored_dict,
+        super().__init__(grid, name, columns, train_predictions, test_predictions, ytrain, restored_data,
                          store_classifier,
                          store_predictions)
         self.coefficients = pd.Series(self.clf.feature_importances_, index=self.columns)

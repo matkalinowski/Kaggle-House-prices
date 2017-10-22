@@ -5,8 +5,6 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import gridspec
 
-from utils.predictions import get_restored_predictions
-
 
 def createQuery(best_params):
     query = ''
@@ -30,12 +28,12 @@ def plot_residuals(actual, predicted, title):
     gs = gridspec.GridSpec(nrows=2, ncols=3, width_ratios=[2, 1, 1])
     ax = fig.add_subplot(gs[:, :-1])
 
-    sns.regplot(predicted, diff, ax=ax)
+    sns.regplot(predicted, diff, ax=ax, scatter_kws={'alpha': 0.3}, line_kws={'alpha': 0.5})
     diff_mean = diff.mean()
     diff_std = diff.std()
     outliers = diff[(diff.values > diff_mean + 3 * diff_std) | (diff.values < diff_mean - 3 * diff_std)]
 
-    conf_range = np.linspace(.9 * int(predicted.min()), 1.1 * int(predicted.max()))
+    conf_range = np.linspace(predicted.min(), predicted.max())
     plot_confidence_interval(ax, conf_range, diff_mean, diff_std, additional_label_info='train', std_count=2)
     plot_confidence_interval(ax, conf_range, diff_mean, diff_std, additional_label_info='train', std_count=3)
 
@@ -87,8 +85,8 @@ class ResultsPlotter(object):
         y = self.results.ytrain
         plot_residuals(y, self.results.train_predictions, 'Residual plot')
 
-        if self.results.restored_dict:
-            _, train_predictions, y = get_restored_predictions(self.results.restored_dict)
+        if self.results.restored_data is not None:
+            _, train_predictions, y = self.results.restored_data.get_restored_values()
             plot_residuals(y, train_predictions, f'Residual plot with values restored.')
 
     def plot_best_predictors(self, predictors_count=10, tick_spacing=.01):
@@ -166,8 +164,8 @@ class ResultsPlotter(object):
         normal_probability(ax, results.train_predictions, 'predicted')
         normal_probability(ax, results.ytrain, 'actual')
 
-        if results.restored_dict:
+        if results.restored_data is not None:
             fig, ax = plt.subplots(figsize=[8, 8])
-            _, predictions, actual = get_restored_predictions(results.restored_dict)
+            _, predictions, actual = results.restored_data.get_restored_values()
             normal_probability(ax, predictions, 'predicted')
             normal_probability(ax, actual, 'actual')

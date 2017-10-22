@@ -1,13 +1,160 @@
-import datetime
+import pickle
 
-import pandas as pd
-from sklearn.metrics import mean_squared_log_error
+from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 
+from utils.ClassifierResults import *
 from utils.dataManagers.dataWrangler import *
+
+
+def get_test_predictions_df(predictions):
+    df = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
+    df.index.name = 'Id'
+    return df
+
+
+def get_submission_from_predictions(predictions, predictions_file_name=None):
+    df = get_test_predictions_df(predictions)
+    if predictions_file_name:
+        df.to_csv(f'scores/{predictions_file_name}.csv')
+    return df
+
+
+def store_object(clf, name):
+    pickle.dump(clf, open(f'{name}.p', 'wb'))
+
+
+class RegressionModel(object):
+    def __init__(self, results_class, estimator, param_grid, name, weights=None):
+        self.name = name
+        self.weights = weights
+        self.param_grid = param_grid
+        self.estimator = estimator
+        self.results_class = results_class
+        self.cv_fit_results = []
+
+    def get_best_cv_estimator_grid(self):
+        df = pd.DataFrame(self.cv_fit_results)
+        return df.iloc[df.val_err.argmin()].grid, df.val_err.min()
+
+
+class EnsemblerNotFittedError(Exception):
+    def __init__(self, message):
+        super(self).__init__(message)
+
+
+class Ensembler(object):
+    def __init__(self, models, name):
+        self.name = name
+        self.models = models
+        self.best_grids = []
+        self.results = []
+
+    @staticmethod
+    def _get_results_dict(split_counter, val_err, grid):
+        result = dict()
+        result['kf_split'] = split_counter
+        result['val_err'] = val_err
+        result['grid'] = grid
+        return result
+
+    def fit(self, x_train, y_train, k_folds=5, gridSearch_folds=5, n_jobs=-1, yield_progress=True):
+        start = datetime.datetime.now()
+        kf = KFold(n_splits=k_folds, random_state=None, shuffle=False)
+        split_counter = 0
+        for train_index, test_index in kf.split(x_train):
+            x_train_kf, x_val_kf = x_train.iloc[train_index], x_train.iloc[test_index]
+            y_train_kf, y_val_kf = y_train.iloc[train_index], y_train.iloc[test_index]
+
+            for model in self.models:
+                if yield_progress:
+                    print(f'kfold number: {split_counter} for model: {model.name},'
+                          f' time is: {datetime.datetime.now()}')
+
+                grid = GridSearchCV(model.estimator, model.param_grid, cv=gridSearch_folds,
+                                    scoring='neg_mean_squared_error',
+                                    n_jobs=n_jobs)
+                if model.weights is not None:
+                    grid.fit(x_train_kf, y_train_kf, sample_weight=model.weights)
+                else:
+                    grid.fit(x_train_kf, y_train_kf)
+
+                val_err = mean_squared_error(np.expm1(grid.predict(x_val_kf)), np.expm1(y_val_kf))
+                if yield_progress:
+                    print(f'Current mean_squared_error on validation set(logged pred and output) is: {val_err}')
+
+                model.cv_fit_results.append(self._get_results_dict(split_counter, val_err, grid))
+            print('---')
+            split_counter += 1
+
+        self.best_grids = []
+        for model in self.models:
+            grid, val_err = model.get_best_cv_estimator_grid()
+            if yield_progress:
+                print(f'Refitting model {model.name}')
+                print(f'Best validation error for model: {model.name} is: {val_err},'
+                      f' chosen parameters are: {grid.best_params_}')
+            grid.fit(x_train, y_train)
+            self.best_grids.append(grid)
+
+        end = datetime.datetime.now()
+        if yield_progress:
+            print(f'\nCalculations started at: {start} and ended at {end}, took: {end-start}')
+
+    @staticmethod
+    def _get_predictions(grid, data, predictions_form_restoring_method=None):
+        if predictions_form_restoring_method is not None:
+            return predictions_form_restoring_method(grid.predict(data))
+        else:
+            return grid.predict(data)
+
+    def predict(self, x_test, predictions_form_restoring_method=None):
+        results = []
+        for grid in self.best_grids:
+            results.append(
+                get_test_predictions_df(self._get_predictions(grid, x_test, predictions_form_restoring_method)))
+        return results
+
+    def calculate_results_objects(self, x_train, y_train, x_test, plot_best_results=True, store_predictions_score=None,
+                                  predictions_form_restoring_method=None, store_classifier=None):
+        self.results = []
+        if self.best_grids is None:
+            raise EnsemblerNotFittedError('Perform fit operation on ensembler first.')
+
+        for i, grid in enumerate(self.best_grids):
+            model = self.models[i]
+            test_predictions = pd.Series(grid.predict(x_test), index=x_test.index)
+            train_predictions = pd.Series(grid.predict(x_train), index=x_train.index)
+            name = model.name + '_from(' + self.name + ')'
+
+            restored_data = None
+            if predictions_form_restoring_method is not None:
+                restored_data = RestoredData(test_predictions,
+                                             train_predictions, y_train,
+                                             predictions_form_restoring_method)
+            res = model.results_class(grid, name, x_test.columns,
+                                      train_predictions, test_predictions, y_train, restored_data,
+                                      store_classifier=store_classifier,
+                                      store_predictions=store_predictions_score)
+            if plot_best_results:
+                res.plot_results()
+            self.results.append(res)
+        return self.results
+
+    def ensemble_predictions(self, wages):
+        if self.results is None:
+            raise EnsemblerNotFittedError('Calculate results objects on ensembler first.')
+        result = 0
+        for i, w in enumerate(wages):
+            res = self.results[i]
+            if res.restored_data:
+                result += res.restored_data.test_predictions * w
+            else:
+                result += res.test_predictions * w
+        return result
 
 
 def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yield_progress=True,
@@ -25,7 +172,9 @@ def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yi
                           y_train, test, stoppingRounds, name=None,
                           predictions_form_restoring_method=predictions_form_restoring_method,
                           plot_results=False, n_jobs=n_jobs)
-        errs.append(mean_squared_log_error(results.grid.predict(x_test), y_test))
+        errs.append(mean_squared_error(np.expm1(results.grid.predict(x_test)), np.expm1(y_test)))
+        if yield_progress:
+            print(f'Current error is: {errs[-1]}')
         res.append(results)
     errors = pd.Series(np.sqrt(errs))
     best_result_indx = errors.argmin()
@@ -65,28 +214,28 @@ def get_df_for_predictions(train, test, standardize=True):
     return df.iloc[:train.shape[0], :], df.iloc[train.shape[0]:, :]
 
 
-def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, stoppingRounds=None, name=None,
+def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, weights, stoppingRounds=None, name=None,
             plot_results=True, store_classifier=False, store_predictions=True,
             predictions_form_restoring_method=None, n_jobs=-1, cv=5):
     if stoppingRounds:
         print('Performing RandomizedSearchCV.')
-        grid = RandomizedSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_log_error', n_jobs=n_jobs,
+        grid = RandomizedSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs,
                                   n_iter=stoppingRounds)
     else:
         print('Performing GridSearchCV.')
-        grid = GridSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_log_error', n_jobs=n_jobs)
-    grid.fit(xtrain, ytrain)
+        grid = GridSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs)
+    grid.fit(xtrain, ytrain, sample_weight=weights)
 
     test_predictions = pd.Series(grid.predict(xtest), index=xtest.index)
     train_predictions = pd.Series(grid.predict(xtrain), index=xtrain.index)
 
-    restored_dict = {}
+    restored_data = None
     if predictions_form_restoring_method is not None:
-        restored_dict = save_restored_predictions_in_dict(predictions_form_restoring_method, test_predictions,
-                                                          train_predictions, ytrain)
+        restored_data = RestoredData(test_predictions,
+                                     train_predictions, ytrain, predictions_form_restoring_method)
 
     results = results_class(grid, name, xtest.columns,
-                            train_predictions, test_predictions, ytrain, restored_dict,
+                            train_predictions, test_predictions, ytrain, restored_data,
                             store_classifier=store_classifier,
                             store_predictions=store_predictions)
     if plot_results:
@@ -94,11 +243,11 @@ def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, stoppingRound
     return results
 
 
-def save_restored_predictions_in_dict(predictions_form_restoring_method, test_predictions, train_predictions, ytrain):
-    return {'test_predictions': predictions_form_restoring_method(test_predictions),
-            'train_predictions': predictions_form_restoring_method(train_predictions),
-            'ytrain': predictions_form_restoring_method(ytrain)}
+class RestoredData(object):
+    def __init__(self, test_predictions, train_predictions, ytrain, restore_method):
+        self.test_predictions = restore_method(test_predictions)
+        self.train_predictions = restore_method(train_predictions)
+        self.ytrain = restore_method(ytrain)
 
-
-def get_restored_predictions(dictionary):
-    return dictionary['test_predictions'], dictionary['train_predictions'], dictionary['ytrain']
+    def get_restored_values(self):
+        return self.test_predictions, self.train_predictions, self.ytrain
