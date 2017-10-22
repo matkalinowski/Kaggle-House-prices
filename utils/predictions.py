@@ -174,40 +174,6 @@ class Ensembler(object):
         return result
 
 
-# def predict_with_kfold(results_class, model, param_grid, X, y, test, folds=5, yield_progress=True,
-#                        plot_best_results=True, predictions_form_restoring_method=None, n_jobs=-1, stoppingRounds=None):
-#     start = datetime.datetime.now()
-#     kf = KFold(n_splits=folds, random_state=None, shuffle=False)
-#     errs = []
-#     res = []
-#     for train_index, test_index in kf.split(X):
-#         if yield_progress:
-#             print(f'iteration: {len(errs)} for class {type(model)}, time is: {datetime.datetime.now()}')
-#         x_train, x_test = X.iloc[train_index], X.iloc[test_index]
-#         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-#         results = predict(results_class, model, param_grid, x_train,
-#                           y_train, test, stoppingRounds, name=None,
-#                           predictions_form_restoring_method=predictions_form_restoring_method,
-#                           plot_results=False, n_jobs=n_jobs)
-#         errs.append(mean_squared_error(np.expm1(results.grid.predict(x_test)), np.expm1(y_test)))
-#         if yield_progress:
-#             print(f'Current error is: {errs[-1]}')
-#         res.append(results)
-#     errors = pd.Series(np.sqrt(errs))
-#     best_result_indx = errors.argmin()
-#     if yield_progress:
-#         print(f'Best test error for model: {type(model)} is: {errors.min()}')
-#         print('Refitting model.')
-#     best_result = res[best_result_indx]
-#     best_result.refit(X, y)
-#     end = datetime.datetime.now()
-#     if yield_progress:
-#         print(f'Calculations started at: {start} and ended at {end}, took: {end-start}')
-#     if plot_best_results:
-#         best_result.plot_results()
-#     return best_result
-
-
 def get_df_for_predictions(train, test, standardize=True):
     all_data = pd.concat((train, test))
 
@@ -229,35 +195,6 @@ def get_df_for_predictions(train, test, standardize=True):
     else:
         df = number_type
     return df.iloc[:train.shape[0], :], df.iloc[train.shape[0]:, :]
-
-
-# def predict(results_class, clf, param_grid, xtrain, ytrain, xtest, weights, stoppingRounds=None, name=None,
-#             plot_results=True, store_classifier=False, store_predictions=True,
-#             predictions_form_restoring_method=None, n_jobs=-1, cv=5):
-#     if stoppingRounds:
-#         print('Performing RandomizedSearchCV.')
-#         grid = RandomizedSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs,
-#                                   n_iter=stoppingRounds)
-#     else:
-#         print('Performing GridSearchCV.')
-#         grid = GridSearchCV(clf, param_grid, cv=cv, scoring='neg_mean_squared_error', n_jobs=n_jobs)
-#     grid.fit(xtrain, ytrain, sample_weight=weights)
-#
-#     test_predictions = pd.Series(grid.predict(xtest), index=xtest.index)
-#     train_predictions = pd.Series(grid.predict(xtrain), index=xtrain.index)
-#
-#     restored_data = None
-#     if predictions_form_restoring_method is not None:
-#         restored_data = RestoredData(test_predictions,
-#                                      train_predictions, ytrain, predictions_form_restoring_method)
-#
-#     results = results_class(grid, name, xtest.columns,
-#                             train_predictions, test_predictions, ytrain, restored_data,
-#                             store_classifier=store_classifier,
-#                             store_predictions=store_predictions)
-#     if plot_results:
-#         results.plot_results()
-#     return results
 
 
 class RestoredData(object):
