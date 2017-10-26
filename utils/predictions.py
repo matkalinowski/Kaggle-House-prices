@@ -1,7 +1,7 @@
 import pickle
 
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 
@@ -27,7 +27,18 @@ def store_object(clf, name):
 
 
 class RegressionModel(object):
-    def __init__(self, results_class, estimator, param_grid, name, weights=None):
+    def __init__(self, results_class, estimator, param_grid, name, n_iter=None, weights=None):
+        """
+        Custom wrapper over regression models.
+        :param results_class: Results class @see ClassifierResults.py
+            example: use RegressionResults for Lasso, Ridge, TreeResults for xgb, random forests.
+        :param estimator: Estimator for example XGBRegressor, Lasso...
+        :param param_grid: parameters to be fitted on estimator,
+        :param name: name of model,
+        :param n_iter:  count of iterations on randomized search in every kfold.
+        :param weights: weights used for tree methods.
+        """
+        self.n_iter = n_iter
         self.name = name
         self.weights = weights
         self.param_grid = param_grid
@@ -51,6 +62,17 @@ class EnsemblerNotFittedError(Exception):
 
 class Ensembler(object):
     def __init__(self, models, name):
+        """
+        Ensembler class containing models.
+        After fitting:
+            kfold_splits_indexes will contain indexes of kfold splits,
+            best_grids will contain best grid for each model,
+        After using calculate_results_objects:
+            results will contain results customized classes- use it to plot results and gain easy access to test
+            predictions @See ClassifierResults.py.
+        :param models: Models list.
+        :param name: Name of ensembler.
+        """
         self.name = name
         self.models = models
         self.best_grids = []
@@ -69,7 +91,18 @@ class Ensembler(object):
     def _get_kfold_sets(x_train, y_train, train_index, test_index):
         return x_train.iloc[train_index], x_train.iloc[test_index], y_train.iloc[train_index], y_train.iloc[test_index]
 
-    def fit(self, x_train, y_train, k_folds=5, gridSearch_folds=5, n_jobs=-1, yield_progress=True):
+    def fit(self, x_train, y_train, k_folds=5, cv_folds=5, n_jobs=-1, yield_progress=True):
+        """
+        Fitting data on every model given in constructor.
+        :param x_train: Train data.
+        :param y_train: Train response.
+        :param k_folds: Number of kfolds.
+        :param cv_folds: Number of gridSearch or randomSearch folds.
+        :param n_jobs: Used in gridSearch or randomSearch. (Number of jobs to run in parallel.)
+        :param yield_progress: Print progress information.
+        :return: None. To see results use method ''predict'' to see test results only or ''calculate_results_objects''.
+        Second one is recommended.
+        """
         start_time = datetime.datetime.now()
         kf = KFold(n_splits=k_folds, random_state=None, shuffle=False)
         split_counter = 0
@@ -79,7 +112,7 @@ class Ensembler(object):
             x_train_kf, x_val_kf, y_train_kf, y_val_kf = self._get_kfold_sets(x_train, y_train, train_index, test_index)
 
             for model in self.models:
-                grid, val_err = self._fit_single_model(gridSearch_folds, model, n_jobs, x_train_kf, x_val_kf,
+                grid, val_err = self._fit_single_model(cv_folds, model, n_jobs, x_train_kf, x_val_kf,
                                                        y_train_kf,
                                                        y_val_kf,
                                                        yield_progress, split_counter)
@@ -104,19 +137,30 @@ class Ensembler(object):
         return grid
 
     @staticmethod
-    def _fit_single_model(gridSearch_folds, model, n_jobs, x_train_kf, x_val_kf, y_train_kf, y_val_kf, yield_progress,
+    def _fit_single_model(gridSearch_folds, model, n_jobs, x_train_kf, x_val_kf, y_train_kf, y_val_kf,
+                          yield_progress,
                           split_counter):
         if yield_progress:
             print(f'kfold number: {split_counter} for model: {model.name},'
                   f' time is: {datetime.datetime.now()}')
-        grid = GridSearchCV(model.estimator, model.param_grid, cv=gridSearch_folds,
-                            scoring='neg_mean_squared_error',
-                            n_jobs=n_jobs)
+        if model.n_iter:
+            print('Performing RandomizedSearchCV.')
+            grid = RandomizedSearchCV(model.estimator, model.param_grid, cv=gridSearch_folds,
+                                      n_iter=model.n_iter,
+                                      scoring='neg_mean_squared_error',
+                                      n_jobs=n_jobs)
+
+        else:
+            print('Performing GridSearchCV.')
+            grid = GridSearchCV(model.estimator, model.param_grid, cv=gridSearch_folds,
+                                scoring='neg_mean_squared_error',
+                                n_jobs=n_jobs)
+
         if model.weights is not None:
             grid.fit(x_train_kf, y_train_kf, sample_weight=model.weights)
         else:
             grid.fit(x_train_kf, y_train_kf)
-        val_err = mean_squared_error(np.expm1(grid.predict(x_val_kf)), np.expm1(y_val_kf))
+        val_err = mean_squared_error(np.expm1(y_val_kf), np.expm1(grid.predict(x_val_kf)))
         if yield_progress:
             print(f'Current mean_squared_error on validation set(logged pred and output) is: {val_err}')
         return grid, val_err

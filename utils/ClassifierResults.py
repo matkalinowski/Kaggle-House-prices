@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.externals import joblib
 
 from utils.plots.plotter import ResultsPlotter
+from utils.plots.plotter import plot_multiple_parameters_train_vs_test
 
 
 def get_most_important_columns(series, columns_count=10):
@@ -42,7 +43,10 @@ class ClassifierResults(object):
         if store_classifier:
             save_classifier(self.clf, self.name)
         if store_predictions:
-            self.test_predictions.to_csv(f'scores/{self.name}.csv')
+            if restored_data is None:
+                self.test_predictions.to_csv(f'scores/{self.name}.csv')
+            else:
+                self.restored_data.test_predictions.to_csv(f'scores/{self.name}.csv')
 
     def __repr__(self):
         return f'Results of {type(self.clf)} with given name: {self.name}.'
@@ -79,7 +83,7 @@ class ClassifierResults(object):
         if plot_results_distplot:
             results_plotter.plot_results_distplot(bins=results_distplot_bins)
         if plot_train_vs_test:
-            results_plotter.plot_multiple_parameters_train_vs_test()
+            plot_multiple_parameters_train_vs_test(self.grid)
         if plot_normal_probability:
             results_plotter.plot_normal_probability()
 
