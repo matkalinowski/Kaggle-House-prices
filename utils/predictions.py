@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 
 from utils.ClassifierResults import *
 from utils.dataManagers.dataWrangler import *
+from utils.plots.plotter import get_scores_df_from_grid
 
 
 def get_test_predictions_df(predictions):
@@ -116,6 +117,7 @@ class Ensembler(object):
                                                        y_train_kf,
                                                        y_val_kf,
                                                        yield_progress, split_counter)
+                get_scores_df_from_grid(grid, store=True)
                 model.cv_fit_results.append(self._get_results_dict(split_counter, val_err, grid))
             lap_end = datetime.datetime.now()
             print(f'kfold lap started at: {lap_start} and ended at: {lap_end}, took: {lap_end - lap_start}\n---')
@@ -132,7 +134,8 @@ class Ensembler(object):
             print(f'Refitting model {model.name}')
             print(f'Best validation error for model: {model.name} is: {val_err},'
                   f' chosen parameters are: {grid.best_params_}')
-        grid.fit(x_train, y_train)
+
+        Ensembler._fit_grid(grid, model, x_train, y_train)
         self.best_grids.append(grid)
         return grid
 
@@ -156,14 +159,18 @@ class Ensembler(object):
                                 scoring='neg_mean_squared_error',
                                 n_jobs=n_jobs)
 
-        if model.weights is not None:
-            grid.fit(x_train_kf, y_train_kf, sample_weight=model.weights)
-        else:
-            grid.fit(x_train_kf, y_train_kf)
+        Ensembler._fit_grid(grid, model, x_train_kf, y_train_kf)
         val_err = mean_squared_error(np.expm1(y_val_kf), np.expm1(grid.predict(x_val_kf)))
         if yield_progress:
             print(f'Current mean_squared_error on validation set(logged pred and output) is: {val_err}')
         return grid, val_err
+
+    @staticmethod
+    def _fit_grid(grid, model, x, y):
+        if model.weights is not None:
+            grid.fit(x, y, sample_weight=model.weights)
+        else:
+            grid.fit(x, y)
 
     @staticmethod
     def _get_predictions(grid, data, predictions_form_restoring_method=None):

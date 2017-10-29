@@ -1,10 +1,12 @@
+import os
+import time
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import gridspec
-import time
 
 
 def createQuery(best_params):
@@ -32,7 +34,7 @@ def plot_residuals(actual, predicted, title):
     sns.regplot(predicted, diff, ax=ax, scatter_kws={'alpha': 0.3}, line_kws={'alpha': 0.5})
     diff_mean = diff.mean()
     diff_std = diff.std()
-    outliers = diff[(diff.values > diff_mean + 3 * diff_std) | (diff.values < diff_mean - 3 * diff_std)]
+    outliers = pd.Series(diff[(diff.values > diff_mean + 3 * diff_std) | (diff.values < diff_mean - 3 * diff_std)])
 
     conf_range = np.linspace(predicted.min(), predicted.max())
     plot_confidence_interval(ax, conf_range, diff_mean, diff_std, additional_label_info='train', std_count=2)
@@ -54,6 +56,9 @@ def plot_residuals(actual, predicted, title):
     ax.axis('off')
     ax.text(.05, .9, f'Number of outliers = {outliers.count()}\nOutliers ids: {outliers.index.values}', fontsize=12)
 
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    outliers.reset_index().to_csv(f'outliers/grid_{timestr}.csv', index=None)
+
     return fig, outliers
 
 
@@ -69,24 +74,33 @@ def normal_probability(ax, predictions, label):
     plt.legend()
 
 
-def plot_multiple_parameters_train_vs_test(grid, yscale='linear', plot_confidence_intervals=True):
+def get_scores_df_from_grid(grid, store=True):
     df = pd.DataFrame(grid.cv_results_['params'])
-    df.fillna(-1, inplace=True)
-
-    query = createQuery(grid.best_params_)
-    best_params_index = df.query(query).index
-
-    checked_params = [str(cv_result).replace('{', '').replace('}', '') for cv_result in grid.cv_results_['params']]
-    width_multiplier = df.shape[0] // 60 + 1
-    fig, ax = plt.subplots(figsize=[width_multiplier * 10, 10], tight_layout=True)
+    # df.fillna(-1, inplace=True)
 
     df['mean_train_score'] = np.sqrt(-grid.cv_results_['mean_train_score'])
     df['mean_test_score'] = np.sqrt(-grid.cv_results_['mean_test_score'])
     df['std_train_score'] = np.sqrt(grid.cv_results_['std_train_score'])
     df['std_test_score'] = np.sqrt(grid.cv_results_['std_test_score'])
 
-    timestr = time.strftime("%Y%m%d-%H%M%S")
-    df.to_csv(f'results/grid_{timestr}.csv', index=None)
+    if store:
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        file_path_and_name = f'results/grid_{timestr}.csv'
+        if not os.path.isfile(file_path_and_name):
+            df.to_csv(file_path_and_name, index=None)
+        else:
+            df.to_csv(file_path_and_name, index=None, mode='a', header=False)
+    return df
+
+
+def plot_multiple_parameters_train_vs_test(grid, yscale='linear', plot_confidence_intervals=True):
+    df = get_scores_df_from_grid(grid)
+    query = createQuery(grid.best_params_)
+    best_params_index = df.query(query).index
+    checked_params = [str(cv_result).replace('{', '').replace('}', '') for cv_result in grid.cv_results_['params']]
+
+    width_multiplier = df.shape[0] // 60 + 1
+    fig, ax = plt.subplots(figsize=[width_multiplier * 10, 10], tight_layout=True)
 
     if plot_confidence_intervals:
         plot_confidence_interval(ax, df.index.values, df.mean_test_score, df.std_test_score, std_count=2,
