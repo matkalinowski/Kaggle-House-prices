@@ -9,6 +9,8 @@ from utils.ClassifierResults import *
 from utils.dataManagers.dataWrangler import *
 from utils.plots.plotter import get_scores_df_from_grid
 
+SCORES_FOLDER = 'scores'
+
 
 def get_test_predictions_df(predictions):
     df = pd.DataFrame(predictions, columns=['SalePrice'], index=range(1461, 2920))
@@ -19,7 +21,7 @@ def get_test_predictions_df(predictions):
 def get_submission_from_predictions(predictions, predictions_file_name=None):
     df = get_test_predictions_df(predictions)
     if predictions_file_name:
-        df.to_csv(f'scores/{predictions_file_name}.csv')
+        df.to_csv(f'{SCORES_FOLDER}/{predictions_file_name}.csv')
     return df
 
 
@@ -97,7 +99,7 @@ class Ensembler(object):
         Fitting data on every model given in constructor.
         :param x_train: Train data.
         :param y_train: Train response.
-        :param k_folds: Number of kfolds.
+        :param k_folds: Number of k_folds.
         :param cv_folds: Number of gridSearch or randomSearch folds.
         :param n_jobs: Used in gridSearch or randomSearch. (Number of jobs to run in parallel.)
         :param yield_progress: Print progress information.
@@ -219,7 +221,7 @@ class Ensembler(object):
             self.results.append(res)
         return self.results
 
-    def ensemble_predictions(self, wages):
+    def ensemble_predictions(self, wages, store=True):
         if self.results is None:
             raise EnsemblerNotFittedError('Calculate results objects on ensembler first.')
         result = 0
@@ -229,6 +231,8 @@ class Ensembler(object):
                 result += res.restored_data.test_predictions * w
             else:
                 result += res.test_predictions * w
+        if store:
+            result.to_csv(f'{SCORES_FOLDER}/{self.name}_wages({wages}).csv')
         return result
 
 
@@ -263,3 +267,14 @@ class RestoredData(object):
 
     def get_restored_values(self):
         return self.test_predictions, self.train_predictions, self.ytrain
+
+def plot_with_y_presence_check(ax, y, plot_function, series):
+    if y is not None:
+        if len(series.index) != len(y.index):
+            print(len(series.index))
+            print(len(y.index))
+            y = y.iloc[series.index]
+            print(len(y.index))
+        plot_function(series, y, ax=ax, color="#9b59b6")
+    else:
+        plot_function(series, ax=ax, color="#9b59b6")

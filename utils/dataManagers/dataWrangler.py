@@ -17,12 +17,3 @@ def log_given_columns(df, cols):
 
 def restore_predictions_from_log1p(predictions):
     return np.expm1(predictions)
-
-
-def power_columns(in_df, cols, power, delete_source=True):
-    df = in_df.copy()
-    for col in cols:
-        df[f'{col}_{power}'] = np.power(df[col], power)
-        if delete_source:
-            del df[col]
-    return df
