@@ -2,7 +2,7 @@
 
 This repository is my solution for [kaggle housing prices competiton](https://www.kaggle.com/c/house-prices-advanced-regression-techniques).
 
-In project creation I tried to create easiest way to ensemble scikit-learn models, visually inspect possible problems and automate most of the process needed to obtain best model.
+In project I tried to create easiest way to ensemble scikit-learn models, visually inspect possible problems and automate most of the process needed to obtain best ensemble.
 
 If you want to take a quick peek at results of the project look at [Ensemble](https://github.com/matkalinowski/Kaggle-House-prices/blob/master/Ensemble.ipynb) file.
 
