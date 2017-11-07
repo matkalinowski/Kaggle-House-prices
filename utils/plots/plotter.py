@@ -24,7 +24,7 @@ def plot_confidence_interval(ax, index, mean, std, additional_label_info, std_co
                     label=f'{std_count}sd of score mean- {additional_label_info}')
 
 
-def plot_residuals(actual, predicted, title):
+def plot_residuals(actual, predicted, title, store_outliers=False):
     diff = pd.Series(actual - predicted)
 
     fig = plt.figure(figsize=[10, 6])
@@ -56,8 +56,9 @@ def plot_residuals(actual, predicted, title):
     ax.axis('off')
     ax.text(.05, .9, f'Number of outliers = {outliers.count()}\nOutliers ids: {outliers.index.values}', fontsize=12)
 
-    timestr = time.strftime("%Y%m%d-%H%M%S")
-    outliers.reset_index().to_csv(f'outliers/grid_{timestr}.csv', index=None)
+    if store_outliers:
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        outliers.reset_index().to_csv(f'outliers/grid_{timestr}.csv', index=None)
 
     return fig, outliers
 

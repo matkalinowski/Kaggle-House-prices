@@ -1,6 +1,5 @@
 import pickle
 
-from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
@@ -27,6 +26,10 @@ def get_submission_from_predictions(predictions, predictions_file_name=None):
 
 def store_object(clf, name):
     pickle.dump(clf, open(f'{name}.p', 'wb'))
+
+
+def load_object(obj_name):
+    return pickle.load(open(obj_name, 'rb'))
 
 
 class RegressionModel(object):
@@ -94,9 +97,11 @@ class Ensembler(object):
     def _get_kfold_sets(x_train, y_train, train_index, test_index):
         return x_train.iloc[train_index], x_train.iloc[test_index], y_train.iloc[train_index], y_train.iloc[test_index]
 
-    def fit(self, x_train, y_train, k_folds=5, cv_folds=5, n_jobs=-1, yield_progress=True):
+    def fit(self, x_train, y_train, calculate_validation_error_method, k_folds=5, cv_folds=5, n_jobs=-1,
+            yield_progress=True, store_grids_results=False):
         """
         Fitting data on every model given in constructor.
+        :param calculate_validation_error_method: Method to obtain validation score error.
         :param x_train: Train data.
         :param y_train: Train response.
         :param k_folds: Number of k_folds.
@@ -118,8 +123,9 @@ class Ensembler(object):
                 grid, val_err = self._fit_single_model(cv_folds, model, n_jobs, x_train_kf, x_val_kf,
                                                        y_train_kf,
                                                        y_val_kf,
-                                                       yield_progress, split_counter)
-                get_scores_df_from_grid(grid, store=True)
+                                                       yield_progress, split_counter, calculate_validation_error_method)
+                if store_grids_results:
+                    get_scores_df_from_grid(grid, store=True)
                 model.cv_fit_results.append(self._get_results_dict(split_counter, val_err, grid))
             lap_end = datetime.datetime.now()
             print(f'kfold lap started at: {lap_start} and ended at: {lap_end}, took: {lap_end - lap_start}\n---')
@@ -144,7 +150,8 @@ class Ensembler(object):
     @staticmethod
     def _fit_single_model(gridSearch_folds, model, n_jobs, x_train_kf, x_val_kf, y_train_kf, y_val_kf,
                           yield_progress,
-                          split_counter):
+                          split_counter,
+                          calculate_validation_error_method):
         if yield_progress:
             print(f'kfold number: {split_counter} for model: {model.name},'
                   f' time is: {datetime.datetime.now()}')
@@ -162,7 +169,7 @@ class Ensembler(object):
                                 n_jobs=n_jobs)
 
         Ensembler._fit_grid(grid, model, x_train_kf, y_train_kf)
-        val_err = mean_squared_error(np.expm1(y_val_kf), np.expm1(grid.predict(x_val_kf)))
+        val_err = calculate_validation_error_method(y_val_kf, grid.predict(x_val_kf))
         if yield_progress:
             print(f'Current mean_squared_error on validation set(logged pred and output) is: {val_err}')
         return grid, val_err
@@ -267,14 +274,3 @@ class RestoredData(object):
 
     def get_restored_values(self):
         return self.test_predictions, self.train_predictions, self.ytrain
-
-def plot_with_y_presence_check(ax, y, plot_function, series):
-    if y is not None:
-        if len(series.index) != len(y.index):
-            print(len(series.index))
-            print(len(y.index))
-            y = y.iloc[series.index]
-            print(len(y.index))
-        plot_function(series, y, ax=ax, color="#9b59b6")
-    else:
-        plot_function(series, ax=ax, color="#9b59b6")
