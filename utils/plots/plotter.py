@@ -138,9 +138,9 @@ class ResultsPlotter(object):
     def __init__(self, results):
         self.results = results
 
-    def plot_actual_vs_predicted_train_scores(self):
+    def plot_actual_vs_predicted_train_scores(self, ci=99):
         fig, ax = plt.subplots(figsize=[8, 8])
-        sns.regplot(self.results.train_predictions, self.results.ytrain, ax=ax, ci=99, label='results')
+        sns.regplot(self.results.train_predictions, self.results.ytrain, ax=ax, ci=ci, label='results')
         ideal = np.linspace(self.results.ytrain.min(), self.results.ytrain.max())
         plt.plot(ideal, ideal, c='r', linewidth=.5, label='ideal values line')
         plt.title('Actual vs predicted train scores.')
